@@ -1,0 +1,359 @@
+<?php
+defined('BASEPATH') or exit('No direct script access allowed');
+
+class SD extends Middleware
+{
+
+    function __construct()
+    {
+        parent::__construct();
+        $this->load->model('M_Login', 'mLogin');
+        $this->load->model('mcu/M_MCU', 'mMCU');
+        $this->load->model('M_Uks', 'mUKS');
+        $this->load->model('siswa/M_Siswa', 'mSiswa');
+    }
+
+    function step1($mcuID)
+    { //Gizi
+
+        $this->load->helper('jenjang');
+        $this->load->model('mcuSD/M_GiziSD', 'mGiziSD');
+        $role = $this->mLogin->getUserRole();
+
+        $mcuData = $this->mMCU->findById($mcuID);
+        $giziData = $this->mGiziSD->findByParentID($mcuData->mcu_id);
+
+        if ($this->input->post()) {
+            $form = $this->input->post();
+            $form['form_id'] = $mcuData->mcu_id;
+
+            if ($giziData) {
+                $this->mGiziSD->updateRow($form);
+            } else {
+                $this->mGiziSD->createRow($form);
+            }
+
+            if (isset($form['form_tgl']) && $mcuData) {
+                $data['siswa'] = $this->mSiswa->findById($mcuData->siswa_id);
+                $born_date = new DateTime($data['siswa']->siswa_tgl_lahir);
+                $selected_date = new DateTime($form['form_tgl']);
+                $interval_date = $born_date->diff($selected_date);
+
+                $form['form_periode'] = $mcuData->periode_id;
+                $form['form_siswa'] = $mcuData->siswa_id;
+                $form['form_lokasi'] = $mcuData->mcu_location;
+                $form['form_tahun'] = $interval_date->y;
+                $form['form_bulan'] = $interval_date->m;
+                $form['form_code'] = $mcuData->mcu_code;
+
+                $this->mMCU->updateRow($form);
+            }
+
+            if($role == 2){
+                redirect("mcu/reservasi?key=33");
+            }else{
+                redirect("mcu/SD/step2/" . $mcuData->mcu_id);
+            }
+        } else {
+            $data['title'] = "Step 1";
+            $data['menu']  = 'MCU SD';
+            $data['smenu'] = '';
+            $data['user']  = $this->mLogin->getNameUser();
+            $data['role']  = $this->mLogin->getUserRole();
+            $data['siswa'] = $this->mSiswa->findById($mcuData->siswa_id);
+            $data['mcu'] = $mcuData;
+            // $mcuData = $this->mMCU->findById($mcuID);    
+            // $data['mcu'] = $mcuData;
+            $jk                 = $data['siswa']->siswa_kelamin;
+            if ($jk == "L") {
+                $data['imtdbb']       = $this->mUKS->getIMTLaki();
+            } else {
+                $data['imtdbb']       = $this->mUKS->getIMTPerempuan();
+            }
+
+            if ($giziData) {
+                $data['gizi'] = $giziData;
+            } else {
+                $data['gizi'] = (object) [
+                    'bb' => '',
+                    'tb' => '',
+                    'lk' => '',
+                    'lla' => '',
+                    'lp' => '',
+                    'pimt' => '',
+                    'status_gizi' => '',
+                    'stun' => '',
+                    'anemia' => '',
+                ];
+            }
+            //var_dump($data['imtdbb']);
+            //var_dump($data['siswa']);
+            $this->blade->render('sd/mcu_step1', $data);
+        }
+    }
+
+    function step2($mcuID)
+    { //Umum
+        $this->load->helper('jenjang');
+        $this->load->model('mcuSD/M_UmumSD', 'mUmumSD');
+
+        $mcuData = $this->mMCU->findById($mcuID);
+        $umumData = $this->mUmumSD->findByParentID($mcuData->mcu_id);
+
+        if ($this->input->post()) {
+            $form = $this->input->post();
+            $form['form_id'] = $mcuData->mcu_id;
+
+            if ($umumData) {
+                if ($this->mUmumSD->updateRow($form)) {
+                    redirect("mcu/SD/step3/" . $mcuData->mcu_id);
+                }
+            } else {
+                if ($this->mUmumSD->createRow($form)) {
+                    redirect("mcu/SD/step3/" . $mcuData->mcu_id);
+                }
+            }
+        } else {
+            $data['title'] = "Step 2";
+            $data['menu']  = 'MCU';
+            $data['smenu'] = '';
+            $data['user']  = $this->mLogin->getNameUser();
+            $data['role']  = $this->mLogin->getUserRole();
+            $data['siswa'] = $this->mSiswa->findById($mcuData->siswa_id);
+            $data['mcu'] = $mcuData;
+            $mcuData = $this->mMCU->findById($mcuID);
+            $data['mcu'] = $mcuData;
+
+
+            if ($umumData) {
+                $data['umum'] = $umumData;
+            } else {
+                $data['umum'] = (object) [
+                    'mata' => '',
+                    'ket_mata' => '',
+                    'hidung' => '',
+                    'ket_hidung' => '',
+                    'rongga_mulut' => '',
+                    'ket_rongga_mulut' => '',
+                    'jantung' => '',
+                    'ket_jantung' => '',
+                    'paru' => '',
+                    'ket_paru' => '',
+                    'neurologi' => '',
+                    'rambut' => '',
+                    'ket_rambut' => '',
+                    'kulit' => '',
+                    'ket_kulit' => '',
+                    'kuku' => '',
+                    'ket_kuku' => '',
+                ];
+            }
+            //var_dump($data['imtdbb']);
+            //var_dump($data['siswa']);
+            $this->blade->render('sd/mcu_step2', $data);
+        }
+    }
+    function step3($mcuID)
+    { //gigi dan mulut
+        $this->load->helper('jenjang');
+        $this->load->model('mcuSD/M_MulutSD', 'mMulutSD');
+
+        $mcuData = $this->mMCU->findById($mcuID);
+        $mulutData = $this->mMulutSD->findByParentID($mcuData->mcu_id);
+
+        if ($this->input->post()) {
+            $form = $this->input->post();
+            $form['form_id'] = $mcuData->mcu_id;
+
+            if ($mulutData) {
+                if ($this->mMulutSD->updateRow($form)) {
+                    redirect("mcu/SD/step4/" . $mcuData->mcu_id);
+                }
+            } else {
+                if ($this->mMulutSD->createRow($form)) {
+                    redirect("mcu/SD/step4/" . $mcuData->mcu_id);
+                }
+            }
+        } else {
+            $data['title'] = "Step 3";
+            $data['menu']  = 'MCU';
+            $data['smenu'] = '';
+            $data['user']  = $this->mLogin->getNameUser();
+            $data['role']  = $this->mLogin->getUserRole();
+            $data['siswa'] = $this->mSiswa->findById($mcuData->siswa_id);
+            $data['mcu'] = $mcuData;
+            $mcuData = $this->mMCU->findById($mcuID);
+            $data['mcu'] = $mcuData;
+
+
+            if ($mulutData) {
+                $data['mulut'] = $mulutData;
+            } else {
+                $data['mulut'] = (object) [
+                    'bibir' => '',
+                    'sudut_mulut' => '',
+                    'sariawan' => '',
+                    'lidah' => '',
+                    'luka_lain' => '',
+                    'ket_masalah_lain_rongga_mulut' => '',
+                    'caries' => '',
+                    'ket_caries' => '',
+                    'gigi_dep' => '',
+                    'ket_masalah_lain_gigi_gusi' => '',
+
+
+                ];
+            }
+            //var_dump($data['imtdbb']);
+            //var_dump($data['siswa']);
+            $this->blade->render('sd/mcu_step3', $data);
+        }
+    }
+    function step4($mcuID)
+    { //Mata dan telinga
+        $this->load->helper('jenjang');
+        $this->load->model('mcuSD/M_MatatelingaSD', 'mMataSD');
+
+        $mcuData = $this->mMCU->findById($mcuID);
+        $mataData = $this->mMataSD->findByParentID($mcuData->mcu_id);
+
+        if ($this->input->post()) {
+            $form = $this->input->post();
+            $form['form_id'] = $mcuData->mcu_id;
+
+            if ($mataData) {
+                if ($this->mMataSD->updateRow($form)) {
+                    redirect("mcu/SD/step5/" . $mcuData->mcu_id);
+                }
+            } else {
+                if ($this->mMataSD->createRow($form)) {
+                    redirect("mcu/SD/step5/" . $mcuData->mcu_id);
+                }
+            }
+        } else {
+            $data['title'] = "Step 4";
+            $data['menu']  = 'MCU';
+            $data['smenu'] = '';
+            $data['user']  = $this->mLogin->getNameUser();
+            $data['role']  = $this->mLogin->getUserRole();
+            $data['siswa'] = $this->mSiswa->findById($mcuData->siswa_id);
+            $data['mcu'] = $mcuData;
+            $mcuData = $this->mMCU->findById($mcuID);
+            $data['mcu'] = $mcuData;
+
+
+            if ($mataData) {
+                $data['matatelinga'] = $mataData;
+            } else {
+                $data['matatelinga'] = (object) [
+                    'mata_luar' => '',
+                    'ket_mata_luar' => '',
+                    'penglihatan' => '',
+                    'ket_penglihatan' => '',
+                    'kacamata' => '',
+                    'ket_kacamata' => '',
+                    'inf_mata' => '',
+                    'ket_inf_mata' => '',
+                    'ket_masalah_lain_penglihatan' => '',
+                    'telinga' => '',
+                    'ket_telinga' => '',
+                    'kot_telinga' => '',
+                    'ket_kot_telinga' => '',
+                    'inf_telinga' => '',
+                    'ket_inf_telinga' => '',
+                    'tajam_pendengaran' => '',
+                    'ket_tajam_pendengaran' => '',
+                    'ket_masalah_lain_pendengaran' => '',
+                ];
+            }
+            //var_dump($data['imtdbb']);
+            //var_dump($data['siswa']);
+            $this->blade->render('sd/mcu_step4', $data);
+        }
+    }
+    function step5($mcuID)
+    { //Lainnya
+        $this->load->helper('jenjang');
+        $this->load->model('mcuSD/M_LainSD', 'mLain');
+
+        $role = $this->mLogin->getUserRole();
+        $mcuData = $this->mMCU->findById($mcuID);
+        $lainData = $this->mLain->findByParentID($mcuData->mcu_id);
+
+        if ($this->input->post()) {
+            $form = $this->input->post();
+            $form['form_id'] = $mcuData->mcu_id;
+
+            if ($lainData) {
+                if ($this->mLain->updateRow($form)) {
+                    if($role == 3){
+                        redirect("mcu/SD/evaluasi/" . $mcuData->mcu_id);
+                    }else{
+                        redirect("mcu/SD/step5/" . $mcuData->mcu_id);
+                    }
+                }
+            } else {
+                if ($this->mLain->createRow($form)) {
+                    if($role == 3){
+                        redirect("mcu/SD/evaluasi/" . $mcuData->mcu_id);
+                    }else{
+                        redirect("mcu/SD/step5/" . $mcuData->mcu_id);
+                    }
+                }
+            }
+        } else {
+            $data['title'] = "Step 5";
+            $data['menu']  = 'MCU';
+            $data['smenu'] = '';
+            $data['user']  = $this->mLogin->getNameUser();
+            $data['role']  = $this->mLogin->getUserRole();
+            $data['siswa'] = $this->mSiswa->findById($mcuData->siswa_id);
+            //$data['mcu'] = $mcuData;
+            $mcuData = $this->mMCU->findById($mcuID);
+            $data['mcu'] = $mcuData;
+
+
+            if ($lainData) {
+                $data['lain'] = $lainData;
+            } else {
+                $data['lain'] = (object) [
+                    'mental' => '',
+                    'saran' => '',
+                    'kesimpulan' => '',
+                    'followup' => '',
+
+
+                ];
+            }
+
+            $this->blade->render('sd/mcu_step5', $data);
+            //var_dump($data);
+        }
+    }
+    function evaluasi($mcuID)
+    {
+        $this->load->helper('jenjang');
+        $mcuData = $this->mMCU->findByIdAllDataSD($mcuID);
+        //$lainData = $this->mLain->findByParentID($mcuData->mcu_id);
+
+        if ($this->input->post()) {
+            // $form = $this->input->post();
+            $form['form_id'] = $mcuData->mcu_id;
+            $form['form_admin'] = $this->mLogin->getUserID(); {
+                $this->mMCU->UpdateStatusFinish($form);
+                //$this->mLain->updateRow($form); 
+                redirect("mcu");
+            }
+        } else {
+            $data['title'] = "Evaluasi";
+            $data['menu']  = 'MCU';
+            $data['smenu'] = '';
+            $data['user']  = $this->mLogin->getNameUser();
+            $data['role']  = $this->mLogin->getUserRole();
+            $data['siswa'] = $this->mSiswa->findById($mcuData->siswa_id);
+            $data['mcu'] = $mcuData;
+            //var_dump($mcuData);
+            $this->blade->render('sd/mcu_evaluasi', $data);
+        }
+    }
+}
